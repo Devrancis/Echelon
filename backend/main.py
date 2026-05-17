@@ -18,7 +18,6 @@ def health_check():
 
 @app.post("/api/v1/scans/launch")
 def launch_scan(payload: ScanRequest):
-    # Dispatch the heavy lifting to the Celery worker via Redis
     task = run_recon_scan.delay(payload.target)
     
     return {

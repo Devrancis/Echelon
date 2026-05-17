@@ -2,8 +2,7 @@ from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     PROJECT_NAME: str = "Echelon Security API"
-    
-    # Infrastructure URIs (Defaults point to Docker containers)
+
     DATABASE_URL: str = "postgresql://echelon:supersecret@db:5432/echelon_db"
     REDIS_URL: str = "redis://redis:6379/0"
 

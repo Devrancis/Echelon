@@ -48,7 +48,7 @@ class Metadata(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     finding_id = Column(Integer, ForeignKey("findings.id"))
-    key = Column(String) # e.g., "raw_request", "cve_id", "matcher_name"
+    key = Column(String)
     value = Column(JSON) # Stores nested JSON output directly from the tools
     
     finding = relationship("Finding", back_populates="meta_data")
