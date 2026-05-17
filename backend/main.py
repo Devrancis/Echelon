@@ -1,6 +1,11 @@
 from fastapi import FastAPI
 from worker import run_recon_scan
 from pydantic import BaseModel
+from core.database import engine, Base
+from core import models
+
+# Generate the database tables on startup
+Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="Echelon Security Platform")
 
