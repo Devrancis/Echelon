@@ -1,6 +1,8 @@
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 import subprocess
 import json
-import os
 from celery import Celery
 from core.config import settings
 from core.database import SessionLocal

@@ -8,7 +8,7 @@ class ScanStatus(enum.Enum):
     PENDING = "pending"
     RUNNING = "running"
     COMPLETED = "completed"
-    FAILED = "failed"
+    FAILED = "failed" 
 
 class Target(Base):
     __tablename__ = "targets"
