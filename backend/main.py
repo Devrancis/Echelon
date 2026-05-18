@@ -2,10 +2,12 @@ import sys
 import os
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI, Depends, HTTPException
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 import core.models as models
+from typing import List
+import datetime
 from core.database import engine, get_db
 from worker import run_recon_scan
 
@@ -18,6 +20,24 @@ app = FastAPI(title="Echelon Security C2")
 class ScanLaunchRequest(BaseModel):
     target_url: str
     label: str = "Automated Recon"
+
+class FindingResponse(BaseModel):
+    id: int
+    severity: str
+    name: str
+    description: str
+
+    class Config:
+        from_attributes = True
+
+class ScanResponse(BaseModel):
+    id: int
+    target_url: str
+    status: str
+    tool_used: str
+    created_at: datetime.datetime
+    total_findings: int
+    findings: List[FindingResponse]
 
 # --- Endpoints ---
 @app.get("/health")
