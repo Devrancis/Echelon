@@ -75,3 +75,25 @@ def launch_scan(payload: ScanLaunchRequest, db: Session = Depends(get_db)):
         "target": target.target_url,
         "status": new_scan.status.value
     }
+
+@app.get("/api/v1/scans/{scan_id}", response_model=ScanResponse)
+def get_scan_results(scan_id: int, db: Session = Depends(get_db)):
+    # 1. Fetch the scan from the Vault
+    scan = db.query(models.Scan).filter(models.Scan.id == scan_id).first()
+    
+    if not scan:
+        raise HTTPException(status_code=404, detail="Scan not found in the Vault.")
+
+    # 2. Fetch all associated findings
+    findings = db.query(models.Finding).filter(models.Finding.scan_id == scan_id).all()
+
+    # 3. Package and return the payload
+    return {
+        "id": scan.id,
+        "target_url": scan.target.target_url,
+        "status": scan.status.value,
+        "tool_used": scan.tool_used,
+        "created_at": scan.created_at,
+        "total_findings": len(findings),
+        "findings": findings
+    }
