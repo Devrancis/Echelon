@@ -1,7 +1,7 @@
 import sys
 import os
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-
+import socketio
 from fastapi import FastAPI, Depends, HTTPException
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
@@ -15,6 +15,14 @@ from worker import run_recon_scan
 models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="Echelon Security C2")
+
+redis_manager = socketio.AsyncRedisManager('redis://redis:6379/0')
+sio = socketio.AsyncServer(
+    async_mode='asgi', 
+    client_manager=redis_manager, 
+    cors_allowed_origins='*' # I will lock this down to the Next.js URL later
+)
+app_asgi = socketio.ASGIApp(sio, other_asgi_app=app)
 
 # --- Schemas ---
 class ScanLaunchRequest(BaseModel):
