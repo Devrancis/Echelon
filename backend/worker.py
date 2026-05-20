@@ -21,32 +21,20 @@ celery_app = Celery(
 @celery_app.task(name="run_recon_scan")
 def run_recon_scan(scan_id: int, target_url: str):
     """
-    Executes a Nuclei security scan against a target, parses the JSON 
-    output, and stores findings directly into PostgreSQL.
+    Executes a Nuclei security scan, parses the JSON output, 
+    stores findings into PostgreSQL, and broadcasts them via Socket.io.
     """
     db = SessionLocal()
+    scan = None
     
     try:
-        # Update scan status in database to RUNNING
+        # 1. THE STARTUP
         scan = db.query(models.Scan).filter(models.Scan.id == scan_id).first()
         if scan:
             scan.status = models.ScanStatus.RUNNING
             db.commit()
-            db.add(new_finding)
-            db.commit()
-            db.refresh(new_finding)
 
-            # THE LIVE TRIGGER: Broadcast the exact vulnerability instantly
-            sio_emitter.emit('new_finding', {
-                'scan_id': scan_id,
-                'severity': new_finding.severity,
-                'name': new_finding.name,
-                'target': target_url
-            })
-
-        # Build the native Nuclei command
-        # -json-export outputs clean JSON objects line-by-line
-        # -silent hides banner clutter
+        # 2. THE EXECUTION
         output_file = f"scan_{scan_id}_results.json"
         cmd = [
             "nuclei",
@@ -56,11 +44,9 @@ def run_recon_scan(scan_id: int, target_url: str):
         ]
 
         print(f"[*] Echelon Engine executing Nuclei on: {target_url}")
+        subprocess.run(cmd, capture_output=True, text=True, check=True)
         
-        # Execute the process safely
-        process = subprocess.run(cmd, capture_output=True, text=True, check=True)
-        
-        # Ingest and Parse Findings
+        # 3. PARSING & LIVE EMITTING
         if os.path.exists(output_file):
             with open(output_file, "r") as f:
                 for line in f:
@@ -69,7 +55,7 @@ def run_recon_scan(scan_id: int, target_url: str):
                     
                     finding_data = json.loads(line)
                     
-                    # Map raw JSON to our Relational DB models
+                    # Create the Finding
                     new_finding = models.Finding(
                         scan_id=scan_id,
                         severity=finding_data.get("info", {}).get("severity", "info"),
@@ -77,20 +63,32 @@ def run_recon_scan(scan_id: int, target_url: str):
                         description=finding_data.get("info", {}).get("description", "No description provided.")
                     )
                     db.add(new_finding)
-                    db.flush() # Grab the finding ID before committing
+                    db.flush() # Locks in the new_finding.id so we can attach Metadata
                     
-                    # Save raw request/response metadata for the UI/SIEM layers later
+                    # Create the Metadata
                     new_meta = models.Metadata(
                         finding_id=new_finding.id,
                         key="raw_nuclei_payload",
                         value=finding_data
                     )
                     db.add(new_meta)
+                    
+                    # Commit both to the Vault
+                    db.commit()
+                    db.refresh(new_finding)
+
+                    # THE LIVE TRIGGER: Broadcast the exact vulnerability instantly
+                    sio_emitter.emit('new_finding', {
+                        'scan_id': scan_id,
+                        'severity': new_finding.severity,
+                        'name': new_finding.name,
+                        'target': target_url
+                    })
             
-            # Clean up local scanner file artifact
+            # Clean up local artifact
             os.remove(output_file)
 
-        # Update scan status to COMPLETED
+        # 4. THE CLEAN FINISH
         if scan:
             scan.status = models.ScanStatus.COMPLETED
             db.commit()
