@@ -32,6 +32,17 @@ def run_recon_scan(scan_id: int, target_url: str):
         if scan:
             scan.status = models.ScanStatus.RUNNING
             db.commit()
+            db.add(new_finding)
+            db.commit()
+            db.refresh(new_finding)
+
+            # THE LIVE TRIGGER: Broadcast the exact vulnerability instantly
+            sio_emitter.emit('new_finding', {
+                'scan_id': scan_id,
+                'severity': new_finding.severity,
+                'name': new_finding.name,
+                'target': target_url
+            })
 
         # Build the native Nuclei command
         # -json-export outputs clean JSON objects line-by-line
