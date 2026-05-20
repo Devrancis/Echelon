@@ -3,10 +3,14 @@ import os
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 import subprocess
 import json
+import socketio
 from celery import Celery
 from core.config import settings
 from core.database import SessionLocal
 from core import models
+
+socket_manager = socketio.RedisManager('redis://redis:6379/0')
+sio_emitter = socketio.Server(client_manager=socket_manager)
 
 celery_app = Celery(
     "echelon_worker",
