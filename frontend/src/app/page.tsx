@@ -3,27 +3,19 @@
 import { useEffect, useState } from "react";
 import { io } from "socket.io-client";
 
-// Define the shape of our incoming telemetry payload
-interface Finding {
-  scan_id: number;
-  severity: string;
-  name: string;
-  target: string;
-}
-
 const socket = io("http://localhost:8000", {
   transports: ["websocket"],
 });
 
 export default function RadarDashboard() {
-  const [findings, setFindings] = useState<Finding[]>([]);
+  const [findings, setFindings] = useState([]);
   const [isConnected, setIsConnected] = useState(false);
 
   useEffect(() => {
     socket.on("connect", () => setIsConnected(true));
     socket.on("disconnect", () => setIsConnected(false));
     
-    socket.on("new_finding", (data: Finding) => {
+    socket.on("new_finding", (data) => {
       setFindings((prev) => [data, ...prev]);
     });
 
@@ -34,8 +26,9 @@ export default function RadarDashboard() {
     };
   }, []);
 
-  const getSeverityBadge = (severity: string) => {
-    const styles: Record<string, string> = {
+  // Dynamic styling engine for security severities
+  const getSeverityBadge = (severity) => {
+    const styles = {
       critical: "bg-red-500/10 text-red-400 border-red-500/30",
       high: "bg-orange-500/10 text-orange-400 border-orange-500/30",
       medium: "bg-yellow-500/10 text-yellow-400 border-yellow-500/30",
@@ -50,6 +43,8 @@ export default function RadarDashboard() {
   return (
     <main className="min-h-screen bg-[#0a0f18] text-slate-300 font-mono p-6">
       <div className="max-w-6xl mx-auto space-y-6">
+        
+        {/* Command Header */}
         <header className="flex items-center justify-between pb-4 border-b border-slate-800">
           <div>
             <h1 className="text-3xl font-bold text-white tracking-tight">Echelon Engine</h1>
@@ -67,6 +62,7 @@ export default function RadarDashboard() {
           </div>
         </header>
 
+        {/* Telemetry Matrix */}
         <section className="bg-[#0f1523] border border-slate-800 rounded-xl overflow-hidden shadow-2xl">
           <div className="bg-slate-900/80 px-4 py-3 border-b border-slate-800 flex justify-between items-center">
             <h2 className="text-sm font-semibold text-slate-400 tracking-widest uppercase">Live Intercept Feed</h2>
