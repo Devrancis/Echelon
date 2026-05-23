@@ -11,6 +11,8 @@ import datetime
 from core.database import engine, get_db
 from worker import run_recon_scan
 from sqlalchemy import func
+from fastapi.responses import Response
+from fpdf import FPDF
 
 models.Base.metadata.create_all(bind=engine)
 
@@ -145,3 +147,82 @@ def get_scan_results(scan_id: int, db: Session = Depends(get_db)):
         "total_findings": len(findings),
         "findings": findings
     }
+
+@app.get("/api/v1/targets/{target_id}/report")
+def generate_target_report(target_id: int, db: Session = Depends(get_db)):
+    """
+    Generates a downloadable PDF intelligence report for a specific target.
+    """
+    # 1. Fetch Target Data
+    target = db.query(models.Target).filter(models.Target.id == target_id).first()
+    if not target:
+        raise HTTPException(status_code=404, detail="Target not found in Vault.")
+
+    # Fetch associated scans and findings
+    scans = db.query(models.Scan).filter(models.Scan.target_id == target.id).all()
+    scan_ids = [s.id for s in scans]
+    findings = db.query(models.Finding).filter(models.Finding.scan_id.in_(scan_ids)).all()
+
+    # Calculate severity counts
+    severity_counts = {"critical": 0, "high": 0, "medium": 0, "low": 0, "info": 0}
+    for f in findings:
+        sev = f.severity.lower()
+        if sev in severity_counts:
+            severity_counts[sev] += 1
+
+    # 2. Build the PDF
+    pdf = FPDF()
+    pdf.add_page()
+    
+    # Header
+    pdf.set_font("helvetica", "B", 24)
+    pdf.cell(0, 20, "ECHELON INTELLIGENCE REPORT", ln=True, align="C")
+    
+    pdf.set_font("helvetica", "B", 14)
+    pdf.cell(0, 10, f"Target Vector: {target.target_url}", ln=True, align="C")
+    pdf.set_font("helvetica", "", 10)
+    pdf.cell(0, 10, f"Generated: {datetime.datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')} UTC", ln=True, align="C")
+    pdf.ln(10)
+
+    # Executive Summary
+    pdf.set_font("helvetica", "B", 16)
+    pdf.cell(0, 10, "Executive Summary", ln=True)
+    pdf.set_font("helvetica", "", 12)
+    pdf.cell(0, 8, f"Total Engagements (Scans): {len(scans)}", ln=True)
+    pdf.cell(0, 8, f"Total Intercepts (Findings): {len(findings)}", ln=True)
+    pdf.ln(5)
+    
+    # Breakdown
+    pdf.set_font("helvetica", "B", 12)
+    for sev, count in severity_counts.items():
+        if count > 0:
+            pdf.cell(0, 8, f"- {sev.upper()}: {count}", ln=True)
+    pdf.ln(10)
+
+    # Findings Log
+    pdf.set_font("helvetica", "B", 16)
+    pdf.cell(0, 10, "Detailed Intercept Log", ln=True)
+    pdf.ln(5)
+
+    for idx, finding in enumerate(findings, 1):
+        # Prevent page breaks in the middle of a finding
+        if pdf.get_y() > 250:
+            pdf.add_page()
+            
+        pdf.set_font("helvetica", "B", 12)
+        pdf.cell(0, 8, f"{idx}. [{finding.severity.upper()}] {finding.name}", ln=True)
+        
+        pdf.set_font("helvetica", "", 10)
+        # Use multi_cell for description to handle text wrapping
+        desc = finding.description if finding.description else "No detailed description provided."
+        pdf.multi_cell(0, 6, f"Details: {desc}")
+        pdf.ln(5)
+
+    # 3. Output the PDF as a binary response
+    pdf_bytes = bytes(pdf.output())
+    
+    headers = {
+        "Content-Disposition": f"attachment; filename=echelon_report_{target.target_url.replace('https://', '').replace('/', '_')}.pdf"
+    }
+    
+    return Response(content=pdf_bytes, media_type="application/pdf", headers=headers)
