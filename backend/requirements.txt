@@ -7,3 +7,4 @@ psycopg2-binary==2.9.9
 pydantic-settings==2.2.1
 python-socketio
 websockets
+fpdf2>=2.7.0
