@@ -302,6 +302,7 @@ export default function RadarDashboard() {
                         <th className="py-3 px-5 text-[9px] text-zinc-500 font-bold uppercase tracking-[0.2em]">Engagements</th>
                         <th className="py-3 px-5 text-[9px] text-zinc-500 font-bold uppercase tracking-[0.2em]">Total Intercepts</th>
                         <th className="py-3 px-5 text-[9px] text-zinc-500 font-bold uppercase tracking-[0.2em]">Last Seen</th>
+                        <th className="py-3 px-5 text-[9px] text-zinc-500 font-bold uppercase tracking-[0.2em] text-right">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-zinc-900/80">
@@ -326,6 +327,15 @@ export default function RadarDashboard() {
                           </td>
                           <td className="py-3 px-5 font-mono text-[10px] text-zinc-600">
                             {asset.last_scan_date ? new Date(asset.last_scan_date).toLocaleString() : 'N/A'}
+                          </td>
+                          <td className="py-3 px-5 text-right">
+                            <a 
+                              href={`http://localhost:8000/api/v1/targets/${asset.id}/report`}
+                              download
+                              className="inline-block text-[9px] bg-zinc-900 border border-zinc-700 text-zinc-400 hover:text-cyan-400 hover:border-cyan-900/50 px-3 py-1.5 uppercase tracking-widest transition-all cursor-pointer"
+                            >
+                              Export PDF
+                            </a>
                           </td>
                         </tr>
                       ))}
