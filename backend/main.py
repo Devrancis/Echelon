@@ -10,6 +10,7 @@ from typing import List, Any
 import datetime
 from core.database import engine, get_db
 from worker import run_recon_scan
+from sqlalchemy import func
 
 models.Base.metadata.create_all(bind=engine)
 
@@ -57,6 +58,40 @@ class ScanResponse(BaseModel):
     findings: List[FindingResponse]
 
 # --- Endpoints ---
+@app.get("/api/v1/targets")
+def get_all_targets(db: Session = Depends(get_db)):
+    """
+    Retrieves all targets and aggregates their scan history and finding counts.
+    """
+    targets = db.query(models.Target).all()
+    
+    fleet_data = []
+    for target in targets:
+        # Count total scans for this target
+        total_scans = db.query(models.Scan).filter(models.Scan.target_id == target.id).count()
+        
+        # Count total findings across all scans for this target
+        total_findings = db.query(models.Finding)\
+            .join(models.Scan)\
+            .filter(models.Scan.target_id == target.id).count()
+            
+        # Get the timestamp of the last scan
+        last_scan = db.query(models.Scan)\
+            .filter(models.Scan.target_id == target.id)\
+            .order_by(models.Scan.created_at.desc()).first()
+            
+        fleet_data.append({
+            "id": target.id,
+            "target_url": target.target_url,
+            "label": target.label,
+            "total_scans": total_scans,
+            "total_findings": total_findings,
+            "last_scan_date": last_scan.created_at if last_scan else None,
+            "status": last_scan.status.value if last_scan else "UNKNOWN"
+        })
+        
+    return {"fleet": fleet_data}
+
 @app.get("/health")
 def health_check():
     return {"status": "operational", "system": "Echelon C2 Engine"}
