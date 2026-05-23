@@ -27,6 +27,7 @@ app_asgi = socketio.ASGIApp(sio, other_asgi_app=app)
 class ScanLaunchRequest(BaseModel):
     target_url: str
     label: str = "Automated Recon"
+    tool: str = "nuclei" # Added tool parameter (nuclei, subfinder, nmap)
 
 class MetadataResponse(BaseModel):
     id: int
@@ -70,19 +71,21 @@ def launch_scan(payload: ScanLaunchRequest, db: Session = Depends(get_db)):
         db.commit()
         db.refresh(target)
 
+    # Log the operation with the specific tool requested
     new_scan = models.Scan(
         target_id=target.id,
         status=models.ScanStatus.PENDING,
-        tool_used="nuclei"
+        tool_used=payload.tool 
     )
     db.add(new_scan)
     db.commit()
     db.refresh(new_scan)
 
-    run_recon_scan.delay(new_scan.id, target.target_url)
+    # Dispatch the order with the tool parameter
+    run_recon_scan.delay(new_scan.id, target.target_url, payload.tool)
 
     return {
-        "message": "Scan command dispatched to worker.",
+        "message": f"Scan command ({payload.tool}) dispatched to worker.",
         "scan_id": new_scan.id,
         "target": target.target_url,
         "status": new_scan.status.value
@@ -91,11 +94,9 @@ def launch_scan(payload: ScanLaunchRequest, db: Session = Depends(get_db)):
 @app.get("/api/v1/scans/{scan_id}", response_model=ScanResponse)
 def get_scan_results(scan_id: int, db: Session = Depends(get_db)):
     scan = db.query(models.Scan).filter(models.Scan.id == scan_id).first()
-    
     if not scan:
         raise HTTPException(status_code=404, detail="Scan not found in the Vault.")
 
-    # Eager load the metadata to prevent N+1 query lag during serialization
     findings = db.query(models.Finding).options(
         joinedload(models.Finding.meta_data)
     ).filter(models.Finding.scan_id == scan_id).all()

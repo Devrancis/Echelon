@@ -11,6 +11,7 @@ export default function RadarDashboard() {
   const [findings, setFindings] = useState<any[]>([]);
   const [isConnected, setIsConnected] = useState(false);
   const [targetUrl, setTargetUrl] = useState("");
+  const [selectedTool, setSelectedTool] = useState("nuclei"); // Default weapon
   const [activeScanId, setActiveScanId] = useState<number | null>(null);
   const [scanStatus, setScanStatus] = useState<string>("IDLE");
   const [selectedFinding, setSelectedFinding] = useState<any | null>(null);
@@ -69,7 +70,7 @@ export default function RadarDashboard() {
       const res = await fetch("http://localhost:8000/api/v1/scans/launch", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ target_url: targetUrl, label: "Manual Override" }),
+        body: JSON.stringify({ target_url: targetUrl, label: "Manual Override", tool: selectedTool }),
       });
       
       const data = await res.json();
@@ -81,7 +82,6 @@ export default function RadarDashboard() {
     }
   };
 
-  // Ultra-minimalist severity rendering
   const getSeverityBadge = (severity: string) => {
     const styles: Record<string, string> = {
       critical: "text-rose-500 border-rose-500/50",
@@ -105,7 +105,6 @@ export default function RadarDashboard() {
         
         {/* Command Module (Left Column) */}
         <aside className="lg:col-span-3 flex flex-col gap-6">
-          {/* Header */}
           <div className="pb-4 border-b border-zinc-800/80">
             <h1 className="text-4xl font-black text-zinc-100 tracking-tighter uppercase flex items-center gap-2">
               Echelon <span className="text-cyan-500 text-lg">_</span>
@@ -113,7 +112,6 @@ export default function RadarDashboard() {
             <p className="text-[10px] text-zinc-500 mt-2 uppercase tracking-[0.3em]">Autonomous Recon C2</p>
           </div>
 
-          {/* Uplink Status */}
           <div className="flex items-center justify-between bg-[#050505] border border-zinc-800/80 p-4">
             <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-[0.2em]">Net Status</span>
             <div className="flex items-center gap-3">
@@ -142,11 +140,24 @@ export default function RadarDashboard() {
                 required
               />
             </div>
+
+            <div className="space-y-2">
+              <label className="block text-[10px] text-zinc-500 uppercase tracking-[0.2em]">Engine Tool</label>
+              <select 
+                value={selectedTool}
+                onChange={(e) => setSelectedTool(e.target.value)}
+                className="w-full bg-black border-b border-zinc-800 focus:border-cyan-500 focus:bg-[#0a0a0a] px-3 py-2 text-sm text-zinc-300 outline-none transition-colors font-mono uppercase tracking-widest cursor-pointer appearance-none"
+              >
+                <option value="nuclei">Nuclei (Vuln Scan)</option>
+                <option value="subfinder">Subfinder (DNS Recon)</option>
+                <option value="nmap">Nmap (Port Scan)</option>
+              </select>
+            </div>
             
             <button 
               type="submit"
               disabled={scanStatus === "RUNNING" || scanStatus === "PENDING"}
-              className="group relative w-full bg-black border border-zinc-800 hover:border-cyan-500/50 text-zinc-400 hover:text-cyan-400 font-bold text-[11px] uppercase tracking-[0.2em] py-3 transition-all disabled:opacity-50 disabled:cursor-not-allowed overflow-hidden"
+              className="group relative w-full bg-black border border-zinc-800 hover:border-cyan-500/50 text-zinc-400 hover:text-cyan-400 font-bold text-[11px] uppercase tracking-[0.2em] py-3 transition-all disabled:opacity-50 disabled:cursor-not-allowed overflow-hidden mt-2"
             >
               <div className="absolute inset-0 bg-cyan-500/10 translate-y-full group-hover:translate-y-0 transition-transform duration-200"></div>
               <span className="relative z-10 flex items-center justify-center gap-2">
@@ -160,7 +171,6 @@ export default function RadarDashboard() {
         <section className="lg:col-span-9 flex flex-col h-[calc(100vh-3rem)]">
           <div className="bg-[#050505] border border-zinc-800/80 flex-grow flex flex-col overflow-hidden relative">
             
-            {/* Grid background effect */}
             <div className="absolute inset-0 pointer-events-none opacity-[0.03]" style={{ backgroundImage: 'radial-gradient(#ffffff 1px, transparent 1px)', backgroundSize: '24px 24px' }}></div>
 
             <div className="px-5 py-4 border-b border-zinc-800/80 flex justify-between items-center bg-black/50 backdrop-blur z-10">
@@ -217,10 +227,9 @@ export default function RadarDashboard() {
             </div>
           </div>
         </section>
-
       </div>
 
-      {/* Detail View Modal (Phase 1: Deep Inspection) */}
+      {/* Detail View Modal */}
       {selectedFinding && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-[#030303] border border-zinc-800 w-full max-w-4xl flex flex-col shadow-2xl shadow-cyan-900/10 max-h-[90vh]">
@@ -268,14 +277,16 @@ export default function RadarDashboard() {
                       <div className="bg-black border border-zinc-900 relative group overflow-hidden">
                         <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
                           <button 
-                            onClick={() => navigator.clipboard.writeText(JSON.stringify(meta.value, null, 2))}
-                            className="text-[9px] bg-zinc-900 border border-zinc-700 text-zinc-400 hover:text-cyan-400 px-2 py-1 uppercase tracking-widest"
+                            onClick={() => navigator.clipboard.writeText(
+                              typeof meta.value === 'string' ? meta.value : JSON.stringify(meta.value, null, 2)
+                            )}
+                            className="text-[9px] bg-zinc-900 border border-zinc-700 text-zinc-400 hover:text-cyan-400 px-2 py-1 uppercase tracking-widest cursor-pointer"
                           >
                             Copy
                           </button>
                         </div>
-                        <pre className="p-4 overflow-x-auto custom-scrollbar font-mono text-[11px] text-cyan-600/70 leading-relaxed">
-                          {JSON.stringify(meta.value, null, 2)}
+                        <pre className="p-4 overflow-x-auto custom-scrollbar font-mono text-[11px] text-cyan-600/70 leading-relaxed whitespace-pre-wrap">
+                          {typeof meta.value === 'string' ? meta.value : JSON.stringify(meta.value, null, 2)}
                         </pre>
                       </div>
                     </div>
