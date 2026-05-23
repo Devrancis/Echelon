@@ -220,49 +220,77 @@ export default function RadarDashboard() {
 
       </div>
 
-      {/* Detail View Modal */}
+      {/* Detail View Modal (Phase 1: Deep Inspection) */}
       {selectedFinding && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-[#030303] border border-zinc-800 w-full max-w-3xl flex flex-col shadow-2xl shadow-cyan-900/10">
-            <div className="px-6 py-4 border-b border-zinc-800 flex justify-between items-start bg-black">
+          <div className="bg-[#030303] border border-zinc-800 w-full max-w-4xl flex flex-col shadow-2xl shadow-cyan-900/10 max-h-[90vh]">
+            <div className="px-6 py-4 border-b border-zinc-800 flex justify-between items-start bg-black shrink-0">
               <div>
                 <div className="mb-3">{getSeverityBadge(selectedFinding.severity)}</div>
                 <h3 className="text-lg font-bold text-zinc-100 tracking-tight">{selectedFinding.name}</h3>
               </div>
               <button 
                 onClick={() => setSelectedFinding(null)}
-                className="text-zinc-600 hover:text-zinc-200 text-xl font-light hover:rotate-90 transition-transform"
+                className="text-zinc-600 hover:text-cyan-400 text-xl font-light hover:rotate-90 transition-all duration-300"
               >
                 ✕
               </button>
             </div>
-            <div className="p-6 overflow-y-auto max-h-[60vh] space-y-8 flex-grow">
-              <div className="space-y-2">
-                <h4 className="text-[10px] font-bold text-zinc-600 uppercase tracking-[0.2em] flex items-center gap-2">
-                  <span className="w-1 h-1 bg-cyan-500"></span> Target Vector
-                </h4>
-                <div className="p-3 bg-black border border-zinc-800 font-mono text-sm text-cyan-400 break-all">
-                  {selectedFinding.target || targetUrl}
+            
+            <div className="p-6 overflow-y-auto custom-scrollbar space-y-8 flex-grow">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div className="space-y-2">
+                  <h4 className="text-[10px] font-bold text-zinc-600 uppercase tracking-[0.2em] flex items-center gap-2">
+                    <span className="w-1 h-1 bg-cyan-500"></span> Target Vector
+                  </h4>
+                  <div className="p-3 bg-black border border-zinc-800 font-mono text-sm text-cyan-400 break-all">
+                    {selectedFinding.target || targetUrl}
+                  </div>
                 </div>
-              </div>
-              <div className="space-y-2">
-                <h4 className="text-[10px] font-bold text-zinc-600 uppercase tracking-[0.2em] flex items-center gap-2">
-                  <span className="w-1 h-1 bg-zinc-600"></span> Analysis
-                </h4>
-                <p className="text-sm text-zinc-400 leading-relaxed font-mono">
-                  {selectedFinding.description || "No extensive description provided by the template engine."}
-                </p>
+                <div className="space-y-2">
+                  <h4 className="text-[10px] font-bold text-zinc-600 uppercase tracking-[0.2em] flex items-center gap-2">
+                    <span className="w-1 h-1 bg-zinc-600"></span> Analysis
+                  </h4>
+                  <p className="text-sm text-zinc-400 leading-relaxed font-mono">
+                    {selectedFinding.description || "No extensive description provided by the template engine."}
+                  </p>
+                </div>
               </div>
               
-              {/* Placeholder for raw JSON payload */}
-              <div className="space-y-2 opacity-50">
-                <h4 className="text-[10px] font-bold text-zinc-600 uppercase tracking-[0.2em] flex items-center gap-2">
-                  <span className="w-1 h-1 bg-zinc-800"></span> Raw Memory Dump
-                </h4>
-                <div className="p-4 bg-black border border-zinc-900 font-mono text-[10px] text-zinc-600 uppercase tracking-widest text-center">
-                  [ Encrypted Metadata Payload - Awaiting Decryption Keys ]
+              {/* Raw JSON Payload Rendering */}
+              {selectedFinding.meta_data && selectedFinding.meta_data.length > 0 ? (
+                <div className="space-y-4 pt-4 border-t border-zinc-800/50">
+                  {selectedFinding.meta_data.map((meta: any, idx: number) => (
+                    <div key={idx} className="space-y-2">
+                      <h4 className="text-[10px] font-bold text-zinc-600 uppercase tracking-[0.2em] flex items-center gap-2">
+                        <span className="w-1 h-1 bg-zinc-700"></span> {meta.key} Dump
+                      </h4>
+                      <div className="bg-black border border-zinc-900 relative group overflow-hidden">
+                        <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button 
+                            onClick={() => navigator.clipboard.writeText(JSON.stringify(meta.value, null, 2))}
+                            className="text-[9px] bg-zinc-900 border border-zinc-700 text-zinc-400 hover:text-cyan-400 px-2 py-1 uppercase tracking-widest"
+                          >
+                            Copy
+                          </button>
+                        </div>
+                        <pre className="p-4 overflow-x-auto custom-scrollbar font-mono text-[11px] text-cyan-600/70 leading-relaxed">
+                          {JSON.stringify(meta.value, null, 2)}
+                        </pre>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              </div>
+              ) : (
+                <div className="space-y-2 opacity-50 pt-4 border-t border-zinc-800/50">
+                  <h4 className="text-[10px] font-bold text-zinc-600 uppercase tracking-[0.2em] flex items-center gap-2">
+                    <span className="w-1 h-1 bg-zinc-800"></span> Raw Memory Dump
+                  </h4>
+                  <div className="p-4 bg-black border border-zinc-900 font-mono text-[10px] text-zinc-600 uppercase tracking-widest text-center">
+                    [ No metadata attached to this finding ]
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>

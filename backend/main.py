@@ -3,15 +3,14 @@ import os
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 import socketio
 from fastapi import FastAPI, Depends, HTTPException
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from pydantic import BaseModel
 import core.models as models
-from typing import List
+from typing import List, Any
 import datetime
 from core.database import engine, get_db
 from worker import run_recon_scan
 
-# Ensure the schema is synced on boot
 models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="Echelon Security C2")
@@ -20,7 +19,7 @@ redis_manager = socketio.AsyncRedisManager('redis://redis:6379/0')
 sio = socketio.AsyncServer(
     async_mode='asgi', 
     client_manager=redis_manager, 
-    cors_allowed_origins='*' # I will lock this down to the Next.js URL later
+    cors_allowed_origins='*'
 )
 app_asgi = socketio.ASGIApp(sio, other_asgi_app=app)
 
@@ -29,11 +28,20 @@ class ScanLaunchRequest(BaseModel):
     target_url: str
     label: str = "Automated Recon"
 
+class MetadataResponse(BaseModel):
+    id: int
+    key: str
+    value: Any
+
+    class Config:
+        from_attributes = True
+
 class FindingResponse(BaseModel):
     id: int
     severity: str
     name: str
     description: str
+    meta_data: List[MetadataResponse] = []
 
     class Config:
         from_attributes = True
@@ -54,7 +62,6 @@ def health_check():
 
 @app.post("/api/v1/scans/launch")
 def launch_scan(payload: ScanLaunchRequest, db: Session = Depends(get_db)):
-    # 1. Identify or register the target
     target = db.query(models.Target).filter(models.Target.target_url == payload.target_url).first()
     
     if not target:
@@ -63,7 +70,6 @@ def launch_scan(payload: ScanLaunchRequest, db: Session = Depends(get_db)):
         db.commit()
         db.refresh(target)
 
-    # 2. Log the operation
     new_scan = models.Scan(
         target_id=target.id,
         status=models.ScanStatus.PENDING,
@@ -73,10 +79,8 @@ def launch_scan(payload: ScanLaunchRequest, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(new_scan)
 
-    # 3. Dispatch the order to Redis -> Celery Worker
     run_recon_scan.delay(new_scan.id, target.target_url)
 
-    # 4. Instantly return control to the dashboard
     return {
         "message": "Scan command dispatched to worker.",
         "scan_id": new_scan.id,
@@ -86,16 +90,16 @@ def launch_scan(payload: ScanLaunchRequest, db: Session = Depends(get_db)):
 
 @app.get("/api/v1/scans/{scan_id}", response_model=ScanResponse)
 def get_scan_results(scan_id: int, db: Session = Depends(get_db)):
-    # 1. Fetch the scan from the Vault
     scan = db.query(models.Scan).filter(models.Scan.id == scan_id).first()
     
     if not scan:
         raise HTTPException(status_code=404, detail="Scan not found in the Vault.")
 
-    # 2. Fetch all associated findings
-    findings = db.query(models.Finding).filter(models.Finding.scan_id == scan_id).all()
+    # Eager load the metadata to prevent N+1 query lag during serialization
+    findings = db.query(models.Finding).options(
+        joinedload(models.Finding.meta_data)
+    ).filter(models.Finding.scan_id == scan_id).all()
 
-    # 3. Package and return the payload
     return {
         "id": scan.id,
         "target_url": scan.target.target_url,

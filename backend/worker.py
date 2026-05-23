@@ -77,12 +77,21 @@ def run_recon_scan(scan_id: int, target_url: str):
                     db.commit()
                     db.refresh(new_finding)
 
-                    # THE LIVE TRIGGER: Broadcast the exact vulnerability instantly
+                    # THE LIVE TRIGGER: Broadcast the exact vulnerability instantly with Metadata
                     sio_emitter.emit('new_finding', {
+                        'id': new_finding.id,
                         'scan_id': scan_id,
                         'severity': new_finding.severity,
                         'name': new_finding.name,
-                        'target': target_url
+                        'description': new_finding.description,
+                        'target': target_url,
+                        'meta_data': [
+                            {
+                                'id': new_meta.id,
+                                'key': new_meta.key,
+                                'value': new_meta.value
+                            }
+                        ]
                     })
             
             # Clean up local artifact
