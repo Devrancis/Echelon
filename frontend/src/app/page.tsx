@@ -3,7 +3,9 @@
 import { useEffect, useState } from "react";
 import { io } from "socket.io-client";
 
-const socket = io("http://localhost:8000", {
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
+const socket = io(API_URL, {
   transports: ["websocket"],
 });
 
@@ -52,7 +54,7 @@ export default function RadarDashboard() {
     if (!activeScanId) return;
     const fetchHistoricalData = async () => {
       try {
-        const res = await fetch(`http://localhost:8000/api/v1/scans/${activeScanId}`);
+        const res = await fetch(`${API_URL}/api/v1/scans/${activeScanId}`);
         if (!res.ok) throw new Error("Vault lookup failed");
         const data = await res.json();
         setScanStatus(data.status);
@@ -72,7 +74,7 @@ export default function RadarDashboard() {
       setIsFleetLoading(true);
       const fetchFleet = async () => {
         try {
-          const res = await fetch(`http://localhost:8000/api/v1/targets`);
+          const res = await fetch(`${API_URL}/api/v1/targets`);
           if (!res.ok) throw new Error("Fleet lookup failed");
           const data = await res.json();
           setFleetData(data.fleet);
@@ -97,7 +99,7 @@ export default function RadarDashboard() {
     setViewMode("matrix"); // Force view to matrix on launch
 
     try {
-      const res = await fetch("http://localhost:8000/api/v1/scans/launch", {
+      const res = await fetch(`${API_URL}/api/v1/scans/launch`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ target_url: targetUrl, label: "Manual Override", tool: selectedTool }),
@@ -330,7 +332,7 @@ export default function RadarDashboard() {
                           </td>
                           <td className="py-3 px-5 text-right">
                             <a 
-                              href={`http://localhost:8000/api/v1/targets/${asset.id}/report`}
+                              href={`${API_URL}/api/v1/targets/${asset.id}/report`}
                               download
                               className="inline-block text-[9px] bg-zinc-900 border border-zinc-700 text-zinc-400 hover:text-cyan-400 hover:border-cyan-900/50 px-3 py-1.5 uppercase tracking-widest transition-all cursor-pointer"
                             >
