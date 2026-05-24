@@ -13,24 +13,35 @@ from worker import run_recon_scan
 from sqlalchemy import func
 from fastapi.responses import Response
 from fpdf import FPDF
+from fastapi.middleware.cors import CORSMiddleware
 
-models.Base.metadata.create_all(bind=engine)
+FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
 
 app = FastAPI(title="Echelon Security C2")
 
-redis_manager = socketio.AsyncRedisManager('redis://redis:6379/0')
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[FRONTEND_URL],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+redis_manager = socketio.AsyncRedisManager(os.getenv("REDIS_URL", "redis://redis:6379/0"))
 sio = socketio.AsyncServer(
     async_mode='asgi', 
     client_manager=redis_manager, 
-    cors_allowed_origins='*'
+    cors_allowed_origins=[FRONTEND_URL] 
 )
+
+models.Base.metadata.create_all(bind=engine)
 app_asgi = socketio.ASGIApp(sio, other_asgi_app=app)
 
 # --- Schemas ---
 class ScanLaunchRequest(BaseModel):
     target_url: str
     label: str = "Automated Recon"
-    tool: str = "nuclei" # Added tool parameter (nuclei, subfinder, nmap)
+    tool: str = "nuclei" 
 
 class MetadataResponse(BaseModel):
     id: int
@@ -69,15 +80,12 @@ def get_all_targets(db: Session = Depends(get_db)):
     
     fleet_data = []
     for target in targets:
-        # Count total scans for this target
         total_scans = db.query(models.Scan).filter(models.Scan.target_id == target.id).count()
         
-        # Count total findings across all scans for this target
         total_findings = db.query(models.Finding)\
             .join(models.Scan)\
             .filter(models.Scan.target_id == target.id).count()
             
-        # Get the timestamp of the last scan
         last_scan = db.query(models.Scan)\
             .filter(models.Scan.target_id == target.id)\
             .order_by(models.Scan.created_at.desc()).first()
@@ -108,7 +116,6 @@ def launch_scan(payload: ScanLaunchRequest, db: Session = Depends(get_db)):
         db.commit()
         db.refresh(target)
 
-    # Log the operation with the specific tool requested
     new_scan = models.Scan(
         target_id=target.id,
         status=models.ScanStatus.PENDING,
@@ -118,7 +125,6 @@ def launch_scan(payload: ScanLaunchRequest, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(new_scan)
 
-    # Dispatch the order with the tool parameter
     run_recon_scan.delay(new_scan.id, target.target_url, payload.tool)
 
     return {
@@ -153,31 +159,24 @@ def generate_target_report(target_id: int, db: Session = Depends(get_db)):
     """
     Generates a downloadable PDF intelligence report for a specific target.
     """
-    # 1. Fetch Target Data
     target = db.query(models.Target).filter(models.Target.id == target_id).first()
     if not target:
         raise HTTPException(status_code=404, detail="Target not found in Vault.")
 
-    # Fetch associated scans and findings
     scans = db.query(models.Scan).filter(models.Scan.target_id == target.id).all()
     scan_ids = [s.id for s in scans]
     findings = db.query(models.Finding).filter(models.Finding.scan_id.in_(scan_ids)).all()
 
-    # Calculate severity counts
     severity_counts = {"critical": 0, "high": 0, "medium": 0, "low": 0, "info": 0}
     for f in findings:
         sev = f.severity.lower()
         if sev in severity_counts:
             severity_counts[sev] += 1
 
-    # 2. Build the PDF
     pdf = FPDF()
     pdf.add_page()
-    
-    # Header
     pdf.set_font("helvetica", "B", 24)
     pdf.cell(0, 20, "ECHELON INTELLIGENCE REPORT", ln=True, align="C")
-    
     pdf.set_font("helvetica", "B", 14)
     pdf.cell(0, 10, f"Target Vector: {target.target_url}", ln=True, align="C")
     pdf.set_font("helvetica", "", 10)
@@ -192,20 +191,17 @@ def generate_target_report(target_id: int, db: Session = Depends(get_db)):
     pdf.cell(0, 8, f"Total Intercepts (Findings): {len(findings)}", ln=True)
     pdf.ln(5)
     
-    # Breakdown
     pdf.set_font("helvetica", "B", 12)
     for sev, count in severity_counts.items():
         if count > 0:
             pdf.cell(0, 8, f"- {sev.upper()}: {count}", ln=True)
     pdf.ln(10)
 
-    # Findings Log
     pdf.set_font("helvetica", "B", 16)
     pdf.cell(0, 10, "Detailed Intercept Log", ln=True)
     pdf.ln(5)
 
     for idx, finding in enumerate(findings, 1):
-        # Prevent page breaks in the middle of a finding
         if pdf.get_y() > 250:
             pdf.add_page()
             
@@ -213,12 +209,10 @@ def generate_target_report(target_id: int, db: Session = Depends(get_db)):
         pdf.cell(0, 8, f"{idx}. [{finding.severity.upper()}] {finding.name}", ln=True)
         
         pdf.set_font("helvetica", "", 10)
-        # Use multi_cell for description to handle text wrapping
         desc = finding.description if finding.description else "No detailed description provided."
         pdf.multi_cell(0, 6, f"Details: {desc}")
         pdf.ln(5)
 
-    # 3. Output the PDF as a binary response
     pdf_bytes = bytes(pdf.output())
     
     headers = {
