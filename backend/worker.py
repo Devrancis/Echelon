@@ -87,27 +87,49 @@ def run_recon_scan(scan_id: int, target_url: str, tool: str = "nuclei"):
                 with open(output_file, "r") as f:
                     for line in f:
                         if not line.strip(): continue
-                        data = json.loads(line)
-                        emit_and_save_finding(
-                            db, scan_id, target_url,
-                            severity=data.get("info", {}).get("severity", "info"),
-                            name=data.get("template-id", "nuclei-finding"),
-                            description=data.get("info", {}).get("description", "No description."),
-                            raw_data=data, tool=tool
-                        )
+                        try:
+                            raw_data = json.loads(line)
+                            # Normalization: Handle both single dicts and lists of dicts
+                            data_list = raw_data if isinstance(raw_data, list) else [raw_data]
+                            
+                            for data in data_list:
+                                if not isinstance(data, dict):
+                                    continue
+                                
+                                emit_and_save_finding(
+                                    db, scan_id, target_url,
+                                    severity=data.get("info", {}).get("severity", "info"),
+                                    name=data.get("template-id", data.get("info", {}).get("name", "nuclei-finding")),
+                                    description=data.get("info", {}).get("description", "No description provided."),
+                                    raw_data=data, tool=tool
+                                )
+                        except json.JSONDecodeError:
+                            print("[-] JSON Parse Error in Nuclei output")
+                            continue
             
             elif tool == "subfinder":
                 with open(output_file, "r") as f:
                     for line in f:
                         if not line.strip(): continue
-                        data = json.loads(line)
-                        emit_and_save_finding(
-                            db, scan_id, target_url,
-                            severity="info",
-                            name="Subdomain Discovered",
-                            description=f"Found subdomain: {data.get('host')}",
-                            raw_data=data, tool=tool
-                        )
+                        try:
+                            raw_data = json.loads(line)
+                            # Normalization
+                            data_list = raw_data if isinstance(raw_data, list) else [raw_data]
+                            
+                            for data in data_list:
+                                if not isinstance(data, dict):
+                                    continue
+                                    
+                                emit_and_save_finding(
+                                    db, scan_id, target_url,
+                                    severity="info",
+                                    name="Subdomain Discovered",
+                                    description=f"Found subdomain: {data.get('host', 'unknown')}",
+                                    raw_data=data, tool=tool
+                                )
+                        except json.JSONDecodeError:
+                            print("[-] JSON Parse Error in Subfinder output")
+                            continue
                         
             elif tool == "nmap":
                 with open(output_file, "r") as f:
